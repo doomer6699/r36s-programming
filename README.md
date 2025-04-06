@@ -4,13 +4,28 @@ Dov Grobgeld
 <dov.grobgeld@gmail.com>
 Last edited: 2024-09-11 Wed
 
+Contributor: Rick Bronson
+
 # License
 
 All files in this repository are licensed under the following BSD License. See ![LICENSE](./LICENSE)
 
 # Intro
 
-The R36S is a very powerful little handheld computer, that comes with the Linux based ArkOS Open Source operating system preinstalled. The system is built with emulation in mind, but as it is a standard Linux based system, it is quite straightforward to write native programs and games for it.
+The R36S is a very powerful little handheld computer, that comes with the Ubuntu Linux based ArkOS Open Source operating system preinstalled. The system is built with emulation in mind, but as it is a standard Linux based system, it is quite straightforward to write native programs and games for it.
+The hardware make up of the R36S is:
+
+ - Rockchip RK3326 Quad-core ARM Cortex-A35 CPU with GPU
+ - One Gigabyte Micron DDR RAM
+ - RK817 PMIC with RTC and CODEC
+ - TCS7191A Class-D audio power amplifier
+ - ME4057 Lithium Ion Battery Linear Charger
+ - 3.5-inch LCD panel (640 x 480) is Sitronix ST7703 or Elida KD35T133 or clone of
+ - One or two SD Card slots, headphone output, one charging USB-C, one USB-C OTG
+
+Here is a photo of the main PCB:
+
+![board-pic](hardware/r36s-board1.png)
 
 This repo will explore what is needed to program the system in C. Note that in addition, you can use almost any program that Linux supports and which has SDL bindings. E.g. C++, python, and zig.
 
@@ -18,7 +33,7 @@ This repo will explore what is needed to program the system in C. Note that in a
 
 In order to program the R36S you first need to connect to it from your computer by carrying out the folloiwing steps.
 
-1. Connect Wifi dongle to the right hand usb port
+1. Connect Wifi dongle to the right hand USB-C port.  Not all WiFi dongles work, especially newer ones.  Your best bet is Realtek or Ralink, the units that come with an internal WiFi module use a RTL8188.
 2. Navigate through EmulationStation (ES) to Options, and connect to your local Wifi, by choosing your SSID and entering your password.
 3. In the Options menu, choose "Enable remote services". This will only be needed the first time, as we will turn on this permanently. (See note about ssh connections below)
 4. After succesfully connecting, check the IP address you connected to through Options->Network Info
@@ -82,7 +97,7 @@ sudo systemctl enable sshd
 ```
 2. Setup C and C++ environment. The arkos system comes with some of the system packages crippled, e.g. they are missing header files needed for C-compilation. The following command rectifies this as well as sets up additional system development packages that we need:
 ```
-sudo apt-get install --reinstall libc6-dev libsdl2-dev linux-libc-dev g++ libstdc++-9-dev libsdl2-ttf-dev git python3 ninja-build cmake make python3
+sudo apt-get install --reinstall gdb libc6-dev libsdl2-dev linux-libc-dev g++ libstdc++-9-dev libsdl2-ttf-dev git python3 ninja-build cmake make python3 i2c-tools usbutils fbcat fbset mmc-utils libglew-dev libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev libglu1-mesa-dev fonts-liberation
 ```
 
 3. We are now ready to compile our first C-program. To do so, first clone this repository by git
@@ -111,7 +126,7 @@ This program writes "Hello world" to the console and quits.
 Our first hello world program was a command line program. But to write games, we want to have graphics. The R36S supports the standard graphics library SDL2. We can test compiling a SDL2 based c-program as follows:
 
 ```
-cd ~/git/r36-programming/cprog/hello-sdl2
+cd ~/git/r36s-programming/cprog/hello-sdl2
 mkdir build && cd build && cmake -GNinja ..
 ninja
 ./hello-sdl2
@@ -119,7 +134,18 @@ ninja
 
 This worked, somehow, but our program "collides" with the use of the screen by ES, because our program and ES are both running at the same time.
 
-To fix this we can exit emulator system by Menu→Quit→Quit Emulationstation. This will turn the EmulationStation off, until next time you reboot the R36S.
+To fix this we can exit emulator system by Menu→Quit→Quit Emulationstation. This will turn the EmulationStation off, until next time you reboot the R36S.  If you want to permanently disable ES, then do:
+
+```
+sudo systemctl disable emulationstation
+```
+
+You can always bring it back by doing:
+
+```
+sudo systemctl enable emulationstation
+```
+
 
 If we now rerun ./hello-sdl2, we get only our colorful SDL on the screen:
 
@@ -208,7 +234,7 @@ The axes are mapped as follows:
 
 To test this on your own, you can run the program `print-joystick`:
 
-```sh
+```
 cd cprog/print-joystick
 mkdir build && cd build && cmake -GNinja ..
 ninja
@@ -216,6 +242,42 @@ ninja
 ```
 
 Press Fn+Start to exit the program.
+
+# SDL2 graphics with TTF font's
+
+This example is a simple C++ program to put fonts using standard installable fonts on the screen:
+
+
+```
+cd ~/git/r36s-programming/cprog/ttf-fonts-sdl2
+make
+./HelloSDL2
+```
+We get some TTF fonts on the screen:
+![sdl-screenshot](images/ttf-font-screenshot.png)
+
+# Playing audio
+
+```sh
+alsamixer # set volume, ESC to exit
+aplay /usr/share/sounds/alsa/Rear_Right.wav
+```
+
+# Reading the 4 GPIO ports
+
+```sh
+cd ~/git/r36s-programming/cprog/devmem
+make
+sudo ./devmem2 0xff040000; sudo ./devmem2 0xff250000; sudo ./devmem2 0xff260000; sudo ./devmem2 0xff270000
+```
+
+You can also turn on/off the green led (GPIO2 PB5 = 77) via:
+
+```sh
+pin=77
+echo 0 > /sys/class/gpio/gpio$pin/value
+echo 1 > /sys/class/gpio/gpio$pin/value
+```
 
 # Installing into EmulationStation
 
@@ -276,6 +338,7 @@ python3 -m pip install pysdl2 pysdl2-dll
 
 Note however that I get a warning about "source-only" when running a python sdl2 program. I'm not sure what this warning means.
 
+
 # Final thoughts
 
 First of all, this repository, and this article is work in progress. I hope to expand it as time allows.
@@ -283,5 +346,3 @@ First of all, this repository, and this article is work in progress. I hope to e
 However, my intention was not to teach "everything". There are lots of material available on the net about Linux, SDL, git, game programming, and more. My intent was to try to put these into perspective with regards to the R36S.
 
 Please let me know your feedback and comments!
-
-
